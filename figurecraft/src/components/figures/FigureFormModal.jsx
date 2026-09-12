@@ -1,114 +1,167 @@
-'use client'
-import { useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+// src/components/figures/FigureFormModal.jsx
+'use client';
 
-export default function FigureFormModal({ userId, isOpen, onClose, onRefresh }) {
-  const [loading, setLoading] = useState(false)
+import { useState } from 'react';
+
+export default function FigureFormModal({ isOpen, onClose, onSubmit }) {
   const [formData, setFormData] = useState({
-    figure_name: '',
-    merchant_name: '',
-    manufacturer_name: '',
-    status: 'UNBUILT',
-    purchase_date: '',
-  })
-  const [imageFile, setImageFile] = useState(null)
+    name: '',
+    series: '',
+    manufacturer: '',
+    scale: '1/7',
+    price: '',
+    status: 'Pre-ordered',
+    imageUrl: '',
+  });
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-
-    try {
-      let imageUrl = null
-
-      // 1. อัปโหลดรูปภาพเข้า Supabase Storage (ถ้ามีเลือกไฟล์)
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop()
-        const filePath = `${userId}/${Date.now()}.${fileExt}`
-
-        const { error: uploadError } = await supabase.storage
-          .from('figure-covers')
-          .upload(filePath, imageFile)
-
-        if (uploadError) throw uploadError
-
-        const { data: publicUrlData } = supabase.storage
-          .from('figure-covers')
-          .getPublicUrl(filePath)
-
-        imageUrl = publicUrlData.publicUrl
-      }
-
-      // 2. บันทึกข้อมูลลงตาราง figure_items
-      const { error: insertError } = await supabase
-        .from('figure_items')
-        .insert([
-          {
-            ...formData,
-            user_id: userId,
-            cover_image: imageUrl,
-          },
-        ])
-
-      if (insertError) throw insertError
-
-      onRefresh()
-      onClose()
-    } catch (err) {
-      alert('เกิดข้อผิดพลาด: ' + err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit(formData);
+    onClose();
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-xl font-bold mb-4">เพิ่มฟิกเกอร์ใหม่</h2>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <input 
-            type="text" placeholder="ชื่อฟิกเกอร์/โมเดล *" required
-            className="w-full border p-2 rounded text-sm"
-            onChange={(e) => setFormData({...formData, figure_name: e.target.value})}
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <input 
-              type="text" placeholder="ค่ายผู้ผลิต"
-              className="border p-2 rounded text-sm"
-              onChange={(e) => setFormData({...formData, manufacturer_name: e.target.value})}
-            />
-            <input 
-              type="text" placeholder="ร้านค้าที่ซื้อ"
-              className="border p-2 rounded text-sm"
-              onChange={(e) => setFormData({...formData, merchant_name: e.target.value})}
-            />
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex justify-center p-4 sm:p-6 md:p-10">
+      <div className="w-full max-w-2xl my-auto">
+        {/* Container หลักสไตล์ Google Forms */}
+        <div className="bg-[#f0ebf8] p-4 sm:p-6 rounded-2xl shadow-2xl border border-purple-100 max-h-[90vh] overflow-y-auto space-y-4">
+          
+          {/* Header Card (Google Forms Header) */}
+          <div className="bg-white rounded-lg border-t-[10px] border-purple-700 p-6 shadow-sm border-x border-b border-slate-200">
+            <h2 className="text-2xl font-bold text-slate-900">เพิ่มข้อมูลฟิกเกอร์ใหม่</h2>
+            <p className="text-sm text-slate-500 mt-2">
+              กรอกรายละเอียดฟิกเกอร์เพื่อบันทึกลงในคอลเลกชันส่วนตัวของคุณ
+            </p>
+            <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-red-500">
+              * จำเป็นต้องกรอก
+            </div>
           </div>
-          <select 
-            className="w-full border p-2 rounded text-sm"
-            value={formData.status}
-            onChange={(e) => setFormData({...formData, status: e.target.value})}
-          >
-            <option value="IN_TRANSIT">🚚 กำลังมาส่ง (In Transit)</option>
-            <option value="UNBUILT">📦 ยังไม่ได้ต่อ (Unbuilt)</option>
-            <option value="COMPLETED">✨ ต่อเสร็จแล้ว (Completed)</option>
-          </select>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">รูปภาพปก</label>
-            <input 
-              type="file" accept="image/*"
-              className="w-full text-sm"
-              onChange={(e) => setImageFile(e.target.files[0])}
-            />
-          </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 border rounded text-sm">ยกเลิก</button>
-            <button type="submit" disabled={loading} className="px-4 py-2 bg-indigo-600 text-white rounded text-sm">
-              {loading ? 'กำลังบันทึก...' : 'บันทึก'}
-            </button>
-          </div>
-        </form>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            
+            {/* Card 1: ชื่อฟิกเกอร์ */}
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-purple-600 transition-all">
+              <label className="block font-medium text-slate-800 mb-2">
+                ชื่อฟิกเกอร์ (Figure Name) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="คำตอบของคุณ"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full border-b border-slate-300 focus:border-purple-600 focus:outline-none py-2 text-slate-800 bg-transparent transition-colors placeholder:text-slate-400"
+              />
+            </div>
+
+            {/* Card 2: เรื่อง / Series & ผู้ผลิต */}
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-purple-600 transition-all">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label className="block font-medium text-slate-800 mb-2">ซีรีส์/มาจากเรื่อง</label>
+                  <input
+                    type="text"
+                    placeholder="คำตอบของคุณ"
+                    value={formData.series}
+                    onChange={(e) => setFormData({ ...formData, series: e.target.value })}
+                    className="w-full border-b border-slate-300 focus:border-purple-600 focus:outline-none py-2 text-slate-800 bg-transparent transition-colors placeholder:text-slate-400"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-800 mb-2">ค่ายผู้ผลิต (Manufacturer)</label>
+                  <input
+                    type="text"
+                    placeholder="คำตอบของคุณ"
+                    value={formData.manufacturer}
+                    onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                    className="w-full border-b border-slate-300 focus:border-purple-600 focus:outline-none py-2 text-slate-800 bg-transparent transition-colors placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: สเกล (Radio Choices) */}
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-purple-600 transition-all">
+              <label className="block font-medium text-slate-800 mb-3">สเกล (Scale)</label>
+              <div className="space-y-2">
+                {['1/4', '1/6', '1/7', '1/8', 'Non-Scale (Nendoroid/Pop Up)'].map((scaleOption) => (
+                  <label key={scaleOption} className="flex items-center gap-3 cursor-pointer py-1">
+                    <input
+                      type="radio"
+                      name="scale"
+                      value={scaleOption}
+                      checked={formData.scale === scaleOption}
+                      onChange={(e) => setFormData({ ...formData, scale: e.target.value })}
+                      className="w-4 h-4 text-purple-600 focus:ring-purple-500 border-slate-300"
+                    />
+                    <span className="text-sm text-slate-700">{scaleOption}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Card 4: ราคา & สถานะ */}
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-purple-600 transition-all">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label className="block font-medium text-slate-800 mb-2">ราคา (บาท)</label>
+                  <input
+                    type="number"
+                    placeholder="0.00"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    className="w-full border-b border-slate-300 focus:border-purple-600 focus:outline-none py-2 text-slate-800 bg-transparent transition-colors placeholder:text-slate-400"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-800 mb-2">สถานะการสะสม</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className="w-full border-b border-slate-300 focus:border-purple-600 focus:outline-none py-2 text-slate-800 bg-transparent transition-colors cursor-pointer"
+                  >
+                    <option value="Pre-ordered">Pre-ordered (สั่งจองแล้ว)</option>
+                    <option value="In Stock">In Stock (ได้รับสินค้าแล้ว)</option>
+                    <option value="Wishlist">Wishlist (อยากได้)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 5: รูปภาพ URL */}
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-purple-600 transition-all">
+              <label className="block font-medium text-slate-800 mb-2">ลิงก์รูปภาพ (Image URL)</label>
+              <input
+                type="url"
+                placeholder="https://example.com/image.jpg"
+                value={formData.imageUrl}
+                onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                className="w-full border-b border-slate-300 focus:border-purple-600 focus:outline-none py-2 text-slate-800 bg-transparent transition-colors placeholder:text-slate-400"
+              />
+            </div>
+
+            {/* Form Footer Action */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                className="bg-purple-700 hover:bg-purple-800 text-white font-medium px-6 py-2.5 rounded-md shadow transition-all active:scale-95"
+              >
+                ส่งข้อมูล (Submit)
+              </button>
+            </div>
+          </form>
+
+        </div>
       </div>
     </div>
-  )
+  );
 }
