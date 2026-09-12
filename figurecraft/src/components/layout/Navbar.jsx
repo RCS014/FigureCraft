@@ -3,16 +3,15 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'[cite: 3]
+import { createClient } from '@/utils/supabase/client'
 
-export default function Navbar({ user, onAddFigureClick }) {
+export default function Navbar({ user = null, onAddFigureClick = undefined }) {
   const pathname = usePathname()
   const router = useRouter()
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const dropdownRef = useRef(null)
   const supabase = createClient()
 
-  // ปิด Dropdown เมื่อคลิกนอกพื้นที่เมนู
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -23,7 +22,6 @@ export default function Navbar({ user, onAddFigureClick }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // ฟังก์ชัน Logout ผ่าน Supabase Auth
   const handleLogout = async () => {
     setIsProfileOpen(false)
     await supabase.auth.signOut()
@@ -66,13 +64,12 @@ export default function Navbar({ user, onAddFigureClick }) {
     <nav className="bg-white border-b border-gray-300 relative z-50">
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
         
-        {/* 1. เมนูนำทางฝั่งซ้าย (Home, Add Figure, Stats) */}
         <div className="flex items-center space-x-1 sm:space-x-2">
           {navItems.map((item) => {
             const isActive = pathname === item.href
             const itemClasses = `flex items-center gap-2 px-3 py-1.5 rounded-md text-base font-semibold transition-colors ${
               isActive
-                ? 'bg-gray-200 text-black' // Highlight พื้นหลังสีเทาอ่อนตามรูปที่ 2
+                ? 'bg-gray-200 text-black'
                 : 'text-black hover:bg-gray-100'
             }`
 
@@ -94,7 +91,6 @@ export default function Navbar({ user, onAddFigureClick }) {
           })}
         </div>
 
-        {/* 2. เมนูโปรไฟล์วงกลมฝั่งขวา + Dropdown (รูป 3) */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -104,7 +100,6 @@ export default function Navbar({ user, onAddFigureClick }) {
             <div className="w-full h-full rounded-full bg-gray-300" />
           </button>
 
-          {/* Popover Dropdown */}
           {isProfileOpen && (
             <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-800 rounded-lg shadow-md py-1.5 z-50">
               <Link
