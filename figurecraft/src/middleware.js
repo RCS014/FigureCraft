@@ -1,3 +1,4 @@
+// src/middleware.js
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
@@ -8,16 +9,24 @@ export async function middleware(request) {
     },
   })
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // เช็กว่ามีค่าและ URL สมบูรณ์หรือไม่ก่อนเรียกใช้
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase URL or Anon Key is missing in environment variables.')
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
           response = NextResponse.next({
             request,
           })
@@ -29,16 +38,7 @@ export async function middleware(request) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // ตัวอย่าง Protection: ถ้ายังไม่ล็อกอินแล้วจะเข้าหน้า Dashboard ให้เด้งไปหน้า /login
-  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
+  await supabase.auth.getUser()
 
   return response
-}
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }
