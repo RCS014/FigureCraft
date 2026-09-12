@@ -29,7 +29,7 @@ export default function FigureFormModal({ isOpen, onClose, onSubmit }) {
         <div className="bg-[#f0ebf8] p-4 sm:p-6 rounded-2xl shadow-2xl border border-purple-100 max-h-[90vh] overflow-y-auto space-y-4">
           
           {/* Header Card (Google Forms Header) */}
-          <div className="bg-white rounded-lg border-t-[10px] border-purple-700 p-6 shadow-sm border-x border-b border-slate-200">
+          <div className="bg-white rounded-lg border-t-10px border-purple-700 p-6 shadow-sm border-x border-b border-slate-200">
             <h2 className="text-2xl font-bold text-slate-900">เพิ่มข้อมูลฟิกเกอร์ใหม่</h2>
             <p className="text-sm text-slate-500 mt-2">
               กรอกรายละเอียดฟิกเกอร์เพื่อบันทึกลงในคอลเลกชันส่วนตัวของคุณ

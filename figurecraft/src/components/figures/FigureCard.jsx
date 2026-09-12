@@ -2,7 +2,7 @@
 export default function FigureCard({ figure }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow group flex flex-col justify-between">
-      <div className="relative aspect-[3/4] bg-slate-100 overflow-hidden">
+      <div className="relative aspect-3/4 bg-slate-100 overflow-hidden">
         {figure.imageUrl ? (
           <img
             src={figure.imageUrl}
