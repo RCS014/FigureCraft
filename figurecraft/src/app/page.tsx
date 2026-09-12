@@ -12,7 +12,6 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
-  // ดึงรายการฟิกเกอร์จาก Supabase
   const fetchFigures = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -30,7 +29,6 @@ export default function HomePage() {
     fetchFigures();
   }, []);
 
-  // ลบฟิกเกอร์จาก Supabase ตาม item_id
   const handleDeleteFigure = async (itemId: number) => {
     if (!confirm('คุณต้องการลบฟิกเกอร์นี้ใช่หรือไม่?')) return;
 
@@ -76,6 +74,7 @@ export default function HomePage() {
                   id: item.item_id,
                   name: item.figure_name,
                   manufacturer: item.manufacturer_name,
+                  price: item.price,
                   status: item.status,
                   imageUrl: item.cover_image,
                   merchant: item.merchant_name,

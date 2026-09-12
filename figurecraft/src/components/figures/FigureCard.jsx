@@ -1,9 +1,15 @@
 // src/components/figures/FigureCard.jsx
+'use client';
+
+import Link from 'next/link';
 import { Trash2 } from 'lucide-react';
 
 export default function FigureCard({ figure, onDelete }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow group flex flex-col justify-between relative">
+    <Link 
+      href={`/figures/${figure.id}`}
+      className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow group flex flex-col justify-between relative cursor-pointer block"
+    >
       <div className="relative aspect-3/4 bg-slate-100 overflow-hidden">
         {figure.imageUrl ? (
           <img
@@ -40,7 +46,11 @@ export default function FigureCard({ figure, onDelete }) {
             </span>
             {onDelete && (
               <button
-                onClick={() => onDelete(figure.id)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete(figure.id);
+                }}
                 className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                 title="ลบฟิกเกอร์"
                 aria-label="ลบฟิกเกอร์"
@@ -51,6 +61,6 @@ export default function FigureCard({ figure, onDelete }) {
           </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }

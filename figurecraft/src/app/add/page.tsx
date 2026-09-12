@@ -16,6 +16,7 @@ export default function AddFigurePage() {
   const [formData, setFormData] = useState({
     figure_name: '',
     manufacturer_name: '',
+    price: '',
     status: 'Pre-ordered',
     cover_image: '',
     purchase_date: '',
@@ -28,19 +29,18 @@ export default function AddFigurePage() {
     setErrorMsg('');
 
     try {
-      // 1. ดึงข้อมูล User ที่ล็อกอินอยู่
       const { data: { user }, error: userError } = await supabase.auth.getUser();
 
       if (userError || !user) {
         throw new Error('กรุณาเข้าสู่ระบบก่อนทำการเพิ่มข้อมูล');
       }
 
-      // 2. บันทึกข้อมูลลงตาราง figure_items
       const { error } = await supabase.from('figure_items').insert([
         {
           user_id: user.id,
           figure_name: formData.figure_name,
           manufacturer_name: formData.manufacturer_name || null,
+          price: formData.price ? parseFloat(formData.price) : null,
           status: formData.status,
           cover_image: formData.cover_image || null,
           purchase_date: formData.purchase_date || null,
@@ -50,7 +50,6 @@ export default function AddFigurePage() {
 
       if (error) throw error;
 
-      // 3. บันทึกสำเร็จ กลับไปหน้าหลัก
       router.push('/');
       router.refresh();
     } catch (err: any) {
@@ -126,9 +125,20 @@ export default function AddFigurePage() {
               </div>
             </div>
 
-            {/* วันที่ซื้อ & สถานะ */}
+            {/* ราคา, วันที่ซื้อ & สถานะ */}
             <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-blue-600">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div>
+                  <label className="block font-medium text-slate-800 mb-2">ราคา (บาท)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    className="w-full border-b border-slate-300 focus:border-blue-600 focus:outline-none py-2 text-slate-800 bg-transparent placeholder:text-slate-400"
+                  />
+                </div>
                 <div>
                   <label className="block font-medium text-slate-800 mb-2">วันที่สั่งซื้อ (Purchase Date)</label>
                   <input
