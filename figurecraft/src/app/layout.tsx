@@ -1,4 +1,5 @@
 import Navbar from '@/components/layout/Navbar'
+import NotificationPopup from '@/components/NotificationPopup'
 import '@/app/globals.css'
 
 export default function RootLayout({
@@ -11,6 +12,7 @@ export default function RootLayout({
       <body className="bg-gray-400 min-h-screen">
         <Navbar />
         <main>{children}</main>
+        <NotificationPopup />
       </body>
     </html>
   )
