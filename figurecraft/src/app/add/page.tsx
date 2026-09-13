@@ -18,6 +18,7 @@ export default function AddFigurePage() {
     manufacturer_name: '',
     price: '',
     status: 'Pre-ordered',
+    assembly_status: 'unbuilt', // 🟢 เพิ่มสถานะการต่อเริ่มต้น
     cover_image: '',
     purchase_date: '',
     merchant_name: '',
@@ -42,6 +43,7 @@ export default function AddFigurePage() {
           manufacturer_name: formData.manufacturer_name || null,
           price: formData.price ? parseFloat(formData.price) : null,
           status: formData.status,
+          assembly_status: formData.assembly_status, // 🟢 ส่งค่า assembly_status ไป Supabase
           cover_image: formData.cover_image || null,
           purchase_date: formData.purchase_date || null,
           merchant_name: formData.merchant_name || null,
@@ -125,9 +127,9 @@ export default function AddFigurePage() {
               </div>
             </div>
 
-            {/* ราคา, วันที่ซื้อ & สถานะ */}
+            {/* ราคา & วันที่สั่งซื้อ */}
             <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-blue-600">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                   <label className="block font-medium text-slate-800 mb-2">ราคา (บาท)</label>
                   <input
@@ -148,8 +150,14 @@ export default function AddFigurePage() {
                     className="w-full border-b border-slate-300 focus:border-blue-600 focus:outline-none py-2 text-slate-800 bg-transparent"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* 🟢 สถานะการครอบครอง & สถานะการต่อ */}
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-blue-600">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
-                  <label className="block font-medium text-slate-800 mb-2">สถานะการสะสม</label>
+                  <label className="block font-medium text-slate-800 mb-2">สถานะสินค้า/สั่งซื้อ</label>
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
@@ -160,10 +168,21 @@ export default function AddFigurePage() {
                     <option value="Wishlist">Wishlist (อยากได้)</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block font-medium text-slate-800 mb-2">สถานะการประกอบ/การต่อ</label>
+                  <select
+                    value={formData.assembly_status}
+                    onChange={(e) => setFormData({ ...formData, assembly_status: e.target.value })}
+                    className="w-full border-b border-slate-300 focus:border-blue-600 focus:outline-none py-2 text-slate-800 bg-transparent cursor-pointer"
+                  >
+                    <option value="unbuilt">ยังไม่ได้ต่อ (Unbuilt)</option>
+                    <option value="built">ต่อเสร็จแล้ว (Built)</option>
+                  </select>
+                </div>
               </div>
             </div>
 
-            {/* รูปภาพ URL */}
+            {/* ลิงก์รูปภาพ */}
             <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-blue-600">
               <label className="block font-medium text-slate-800 mb-2">ลิงก์รูปภาพ (Cover Image URL)</label>
               <input
