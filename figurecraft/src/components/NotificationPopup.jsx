@@ -2,76 +2,106 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { Bell, X, Package } from 'lucide-react'
 
 export default function NotificationPopup() {
-  const [show, setShow] = useState(false)
-  const [unbuiltItems, setUnbuiltItems] = useState([])
+  const [isOpen, setIsOpen] = useState(false)
+  const [unbuiltCount, setUnbuiltCount] = useState(0)
   const supabase = createClient()
 
   useEffect(() => {
-    const checkNotification = async () => {
+    let timerId = null
+
+    async function setupNotificationCheck() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // ตรวจสอบว่าเปิดใช้งาน Notification ใน Profile หรือไม่
-      const { data: profile } = await supabase
+      // 1. ดึงข้อมูลการตั้งค่าจาก profiles
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('is_notification_enabled')
+        .select('is_notification_enabled, notification_day, notification_time')
         .eq('id', user.id)
         .single()
 
-      if (profile?.is_notification_enabled) {
-        // ดึงรายการที่ยังไม่ได้ต่อ
-        const { data: figures } = await supabase
-          .from('figure_items')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'unbuilt')
+      if (profileError || !profile || !profile.is_notification_enabled) {
+        return
+      }
 
-        if (figures && figures.length > 0) {
-          setUnbuiltItems(figures)
-          // ให้แสดง Pop-up เพียงครั้งเดียวต่อ session (หรือกดแล้วไม่แสดงซ้ำ)
-          const hasShown = sessionStorage.getItem('popup_shown')
-          if (!hasShown) {
-            setShow(true)
-            sessionStorage.setItem('popup_shown', 'true')
-          }
+      const { notification_day, notification_time } = profile
+      if (!notification_time) return
+
+      // 2. ดึงจำนวนรายการที่ยังไม่ได้ต่อ
+      const { data: unbuiltItems } = await supabase
+        .from('figure_items')
+        .select('item_id')
+        .eq('user_id', user.id)
+        .neq('assembly_status', 'assembled') // ดึงรายการที่ยังไม่เสร็จ
+
+      const count = unbuiltItems ? unbuiltItems.length : 0
+
+      // 3. ฟังก์ชั่นตรวจสอบเวลา
+      const checkAndTriggerPopup = () => {
+        const now = new Date()
+
+        // ตรวจสอบวันในสัปดาห์
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        const currentDay = days[now.getDay()]
+
+        const isToday =
+          !notification_day ||
+          notification_day === 'Everyday' ||
+          notification_day === 'Daily' ||
+          notification_day.toLowerCase() === currentDay.toLowerCase()
+
+        if (!isToday) return
+
+        // ตรวจสอบเวลา HH:mm
+        const currentHours = String(now.getHours()).padStart(2, '0')
+        const currentMinutes = String(now.getMinutes()).padStart(2, '0')
+        const currentTimeStr = `${currentHours}:${currentMinutes}`
+        const targetTimeStr = notification_time.slice(0, 5) // รูปแบบ HH:mm
+
+        // เช็คว่าวันนี้เคยแสดงแจ้งเตือนไปหรือยัง (กัน Pop Up เด้งรัวๆ ในนาทีเดียวกัน)
+        const todayKey = `notified_${now.toISOString().slice(0, 10)}`
+        const alreadyNotified = localStorage.getItem(todayKey)
+
+        if (currentTimeStr === targetTimeStr && !alreadyNotified) {
+          setUnbuiltCount(count)
+          setIsOpen(true)
+          localStorage.setItem(todayKey, 'true')
         }
       }
+
+      // ตรวจสอบทันที และตั้งเวลาตรวจสอบทุกๆ 30 วินาที
+      checkAndTriggerPopup()
+      timerId = setInterval(checkAndTriggerPopup, 30000)
     }
 
-    checkNotification()
-  }, [supabase])
+    setupNotificationCheck()
 
-  if (!show) return null
+    return () => {
+      if (timerId) clearInterval(timerId)
+    }
+  }, [])
+
+  if (!isOpen) return null
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 max-w-sm w-full bg-white rounded-2xl shadow-2xl border border-amber-200 p-5 animate-bounce-short">
-      <button
-        onClick={() => setShow(false)}
-        className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
-      >
-        <X size={18} />
-      </button>
-
-      <div className="flex items-center gap-3 text-amber-600 mb-3">
-        <div className="p-2 bg-amber-100 rounded-full">
-          <Bell size={22} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4 text-center">
+        <div className="text-4xl mb-2">🔔</div>
+        <h3 className="text-lg font-bold text-gray-800">แจ้งเตือนประจำวัน</h3>
+        <p className="text-gray-600 mt-2">
+          คุณมีโมเดลที่ยังไม่ได้ต่ออีก <span className="font-bold text-amber-600">{unbuiltCount}</span> ตัว!
+        </p>
+        <div className="mt-6">
+          <button
+            onClick={() => setIsOpen(false)}
+            className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium text-sm"
+          >
+            รับทราบ
+          </button>
         </div>
-        <h4 className="font-bold text-gray-800 text-sm">แจ้งเตือนกล่องดอง 📦</h4>
       </div>
-
-      <p className="text-xs text-gray-600 mb-3">
-        อย่าลืมหาเวลาต่อฟิกเกอร์น้า! คุณมีกล่องดองรออยู่อีก <strong className="text-amber-600">{unbuiltItems.length}</strong> ชิ้น
-      </p>
-
-      <button
-        onClick={() => setShow(false)}
-        className="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold py-2 rounded-lg transition"
-      >
-        เข้าใจแล้ว
-      </button>
     </div>
   )
 }

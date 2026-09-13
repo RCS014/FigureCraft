@@ -121,3 +121,17 @@ export default function HomePage() {
     </main>
   );
 }
+
+import NotificationPopup from '@/components/NotificationPopup'
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="th">
+      <body>
+        {children}
+        {/* ติดตั้ง Pop Up แจ้งเตือนไว้ที่ระดับ Root Layout */}
+        <NotificationPopup />
+      </body>
+    </html>
+  )
+}
