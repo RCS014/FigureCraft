@@ -9,7 +9,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="th">
-      <body className="bg-gray-400 min-h-screen">
+      <body className="bg-white min-h-screen">
         <Navbar />
         <main>{children}</main>
         <NotificationPopup />

@@ -34,7 +34,7 @@ export default function NotificationPopup() {
         .from('figure_items')
         .select('item_id')
         .eq('user_id', user.id)
-        .neq('assembly_status', 'assembled') // ดึงรายการที่ยังไม่เสร็จ
+        .neq('assembly_status', 'built')
 
       const count = unbuiltItems ? unbuiltItems.length : 0
 

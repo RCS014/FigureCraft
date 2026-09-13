@@ -8,6 +8,7 @@ export default function DashboardPage() {
     total: 0,
     assembled: 0,
     unassembled: 0,
+    totalPrice: 0,
   })
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
@@ -19,10 +20,10 @@ export default function DashboardPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // ดึงรายการฟิกเกอร์ของผู้ใช้
+        // ดึงรายการฟิกเกอร์ของผู้ใช้พร้อมคอลัมน์ price
         const { data: items, error } = await supabase
           .from('figure_items')
-          .select('item_id, assembly_status')
+          .select('item_id, assembly_status, price')
           .eq('user_id', user.id)
 
         if (error) {
@@ -32,13 +33,23 @@ export default function DashboardPage() {
 
         if (items) {
           const total = items.length
-          // ตรวจสอบสถานะว่าต่อเสร็จแล้วหรือไม่ (ปรับ string ตามค่าที่คุณเก็บใน DB เช่น 'assembled' หรือ 'completed')
+          
+          // เช็คสถานะรองรับทั้ง 'built', 'assembled', และ 'completed'
           const assembled = items.filter(
-            (item) => item.assembly_status === 'assembled' || item.assembly_status === 'completed'
+            (item) => 
+              item.assembly_status === 'built' || 
+              item.assembly_status === 'assembled' || 
+              item.assembly_status === 'completed'
           ).length
           const unassembled = total - assembled
 
-          setStats({ total, assembled, unassembled })
+          // คำนวณราคารวมทั้งหมด
+          const totalPrice = items.reduce(
+            (sum, item) => sum + (Number(item.price) || 0),
+            0
+          )
+
+          setStats({ total, assembled, unassembled, totalPrice })
         }
       } catch (err) {
         console.error('Unexpected error:', err)
@@ -50,13 +61,13 @@ export default function DashboardPage() {
     fetchDashboardStats()
   }, [])
 
-  if (loading) return <div className="p-6">กำลังโหลดข้อมูล...</div>
+  if (loading) return <div className="p-6 text-gray-600">กำลังโหลดข้อมูล...</div>
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* โมเดลทั้งหมด */}
         <div className="p-4 bg-white rounded-xl shadow border border-gray-100">
           <p className="text-sm text-gray-500">โมเดลทั้งหมด</p>
@@ -73,6 +84,12 @@ export default function DashboardPage() {
         <div className="p-4 bg-amber-50 rounded-xl shadow border border-amber-200">
           <p className="text-sm text-amber-600 font-medium">ยังไม่ได้ต่อ</p>
           <p className="text-3xl font-bold text-amber-700">{stats.unassembled} ตัว</p>
+        </div>
+
+        {/* ราคารวมทั้งหมด */}
+        <div className="p-4 bg-blue-50 rounded-xl shadow border border-blue-200">
+          <p className="text-sm text-blue-600 font-medium">ราคารวมทั้งหมด</p>
+          <p className="text-3xl font-bold text-blue-700">฿{stats.totalPrice.toLocaleString()}</p>
         </div>
       </div>
     </div>
