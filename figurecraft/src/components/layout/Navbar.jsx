@@ -41,7 +41,8 @@ export default function Navbar() {
       <div className="flex items-center gap-4">
         {user ? (
           <>
-            <Link href="/settings" className="hover:underline">Setting</Link>
+            <Link href="/dashboard" className="hover:underline">Dashboard</Link>
+            <Link href="/settings" className="hover:underline">Settings</Link>
             <button 
               onClick={handleSignOut}
               className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded transition"
