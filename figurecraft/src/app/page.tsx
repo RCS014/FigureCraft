@@ -43,6 +43,7 @@ export default function HomePage() {
     }
   };
 
+  // ระบุ Type ให้พารามิเตอร์ itemId และ updatedFields
   const handleUpdateStatus = async (itemId: number, updatedFields: Record<string, any>) => {
     const { error } = await supabase
       .from('figure_items')
@@ -98,7 +99,8 @@ export default function HomePage() {
                   purchaseDate: item.purchase_date,
                 }}
                 onDelete={() => handleDeleteFigure(item.item_id)}
-                onUpdateStatus={(id, updatedFields) => handleUpdateStatus(id, updatedFields)}
+                // ส่งฟังก์ชัน handleUpdateStatus เข้าไปโดยตรง
+                onUpdateStatus={handleUpdateStatus}
               />
             ))}
           </div>
