@@ -9,10 +9,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   
-  // Profile State
+  // Profile State (ตัด avatarUrl และ avatarFile ออกแล้ว)
   const [name, setName] = useState('')
-  const [avatarUrl, setAvatarUrl] = useState('')
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
 
   // Notification State
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false)
@@ -27,13 +25,12 @@ export default function SettingsPage() {
       setUserId(user.id)
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('name, is_notification_enabled, notification_day, notification_time')
         .eq('id', user.id)
         .single()
 
       if (data && !error) {
         setName(data.name || '')
-        setAvatarUrl(data.avatar_url || '')
         setIsNotificationEnabled(data.is_notification_enabled || false)
         setNotificationDay(data.notification_day || 'Monday')
         setNotificationTime(data.notification_time || '09:00')
@@ -44,39 +41,17 @@ export default function SettingsPage() {
     fetchProfile()
   }, [supabase])
 
-  // อัปโหลดรูปภาพโปรไฟล์ไปยัง Supabase Storage
-  const uploadAvatar = async (file: File, uid: string) => {
-    const fileExt = file.name.split('.').pop()
-    const filePath = `${uid}/avatar.${fileExt}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file, { upsert: true })
-
-    if (uploadError) throw uploadError
-
-    const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
-    return data.publicUrl
-  }
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userId) return
 
     setSaving(true)
     try {
-      let finalAvatarUrl = avatarUrl
-
-      if (avatarFile) {
-        finalAvatarUrl = await uploadAvatar(avatarFile, userId)
-      }
-
       const { error } = await supabase
         .from('profiles')
         .upsert({
           id: userId,
           name,
-          avatar_url: finalAvatarUrl,
           is_notification_enabled: isNotificationEnabled,
           notification_day: notificationDay,
           notification_time: notificationTime,
@@ -84,7 +59,6 @@ export default function SettingsPage() {
 
       if (error) throw error
       alert('บันทึกข้อมูลเรียบร้อยแล้ว!')
-      setAvatarUrl(finalAvatarUrl)
     } catch (err: any) {
       alert(`เกิดข้อผิดพลาด: ${err.message}`)
     } finally {
@@ -99,24 +73,6 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-bold mb-6">ตั้งค่าบัญชีและการแจ้งเตือน</h1>
 
       <form onSubmit={handleSave} className="space-y-6">
-        {/* รูปโปรไฟล์ */}
-        <div>
-          <label className="block text-sm font-medium mb-2">รูปโปรไฟล์</label>
-          <div className="flex items-center gap-4">
-            <img
-              src={avatarUrl || 'https://via.placeholder.com/100'}
-              alt="Profile"
-              className="w-20 h-20 rounded-full object-cover border"
-            />
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => e.target.files?.[0] && setAvatarFile(e.target.files[0])}
-              className="text-sm"
-            />
-          </div>
-        </div>
-
         {/* ชื่อผู้ใช้งาน */}
         <div>
           <label className="block text-sm font-medium mb-1">ชื่อผู้ใช้งาน</label>
@@ -124,7 +80,8 @@ export default function SettingsPage() {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full border p-2 rounded"
+            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="กรอกชื่อผู้ใช้งาน"
           />
         </div>
 
@@ -140,9 +97,9 @@ export default function SettingsPage() {
               id="enable-notify"
               checked={isNotificationEnabled}
               onChange={(e) => setIsNotificationEnabled(e.target.checked)}
-              className="w-4 h-4 mr-2"
+              className="w-4 h-4 mr-2 text-blue-600 rounded"
             />
-            <label htmlFor="enable-notify" className="font-medium">
+            <label htmlFor="enable-notify" className="font-medium cursor-pointer">
               เปิดการแจ้งเตือนทาง Email
             </label>
           </div>
@@ -154,7 +111,7 @@ export default function SettingsPage() {
                 <select
                   value={notificationDay}
                   onChange={(e) => setNotificationDay(e.target.value)}
-                  className="w-full border p-2 rounded"
+                  className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
                     <option key={day} value={day}>{day}</option>
@@ -168,7 +125,7 @@ export default function SettingsPage() {
                   type="time"
                   value={notificationTime}
                   onChange={(e) => setNotificationTime(e.target.value)}
-                  className="w-full border p-2 rounded"
+                  className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -178,7 +135,7 @@ export default function SettingsPage() {
         <button
           type="submit"
           disabled={saving}
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:bg-gray-400"
+          className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:bg-gray-400 font-medium transition"
         >
           {saving ? 'กำลังบันทึก...' : 'บันทึกการเปลี่ยนแปลง'}
         </button>
