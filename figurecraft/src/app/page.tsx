@@ -1,4 +1,3 @@
-// src/app/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -44,6 +43,23 @@ export default function HomePage() {
     }
   };
 
+  const handleUpdateStatus = async (itemId: number, updatedFields: Record<string, any>) => {
+    const { error } = await supabase
+      .from('figure_items')
+      .update(updatedFields)
+      .eq('item_id', itemId);
+
+    if (!error) {
+      setFigures((prev) =>
+        prev.map((item) =>
+          item.item_id === itemId ? { ...item, ...updatedFields } : item
+        )
+      );
+    } else {
+      alert('เกิดข้อผิดพลาดในการอัปเดตสถานะ: ' + error.message);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
       <div className="max-w-7xl mx-auto">
@@ -76,11 +92,13 @@ export default function HomePage() {
                   manufacturer: item.manufacturer_name,
                   price: item.price,
                   status: item.status,
+                  assemblyStatus: item.assembly_status,
                   imageUrl: item.cover_image,
                   merchant: item.merchant_name,
                   purchaseDate: item.purchase_date,
                 }}
                 onDelete={() => handleDeleteFigure(item.item_id)}
+                onUpdateStatus={(id, updatedFields) => handleUpdateStatus(id, updatedFields)}
               />
             ))}
           </div>
