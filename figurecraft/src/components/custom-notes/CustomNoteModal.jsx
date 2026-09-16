@@ -65,7 +65,7 @@ export default function CustomNoteModal({ item, isOpen, onClose, onSaved }) {
             <label className="text-xs font-semibold text-slate-600">✏️ งานดีเทล / เดินลาย (Detail Note)</label>
             <textarea 
               rows={3} 
-              className="w-full border border-slate-300 p-2.5 rounded-lg text-sm mt-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="w-full border border-slate-300 p-2.5 rounded-lg text-sm mt-1 text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               value={notes.detail_note}
               onChange={(e) => setNotes({...notes, detail_note: e.target.value})}
               placeholder="เช่น เดินลายเพิ่มตรงหัวไหล่, เจาะรูใส่พาร์ทเสริม..."
@@ -75,7 +75,7 @@ export default function CustomNoteModal({ item, isOpen, onClose, onSaved }) {
             <label className="text-xs font-semibold text-slate-600">🎨 งานทำสี / พ่นสี (Paint Note)</label>
             <textarea 
               rows={3} 
-              className="w-full border border-slate-300 p-2.5 rounded-lg text-sm mt-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="w-full border border-slate-300 p-2.5 rounded-lg text-sm mt-1 text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               value={notes.paint_note}
               onChange={(e) => setNotes({...notes, paint_note: e.target.value})}
               placeholder="เช่น เกราะนอกใช้สีขาวมุก, เฟรมในใช้ Metallic Grey..."
@@ -85,7 +85,7 @@ export default function CustomNoteModal({ item, isOpen, onClose, onSaved }) {
             <label className="text-xs font-semibold text-slate-600">🏷️ งานติดดีเคล (Decal Note)</label>
             <textarea 
               rows={3} 
-              className="w-full border border-slate-300 p-2.5 rounded-lg text-sm mt-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="w-full border border-slate-300 p-2.5 rounded-lg text-sm mt-1 text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               value={notes.decal_note}
               onChange={(e) => setNotes({...notes, decal_note: e.target.value})}
               placeholder="เช่น ใช้ดีเคลน้ำค่าย EVO, ติดเน้นบริเวณโล่และปีก..."
