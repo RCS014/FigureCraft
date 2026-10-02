@@ -1,27 +1,26 @@
 // src/app/api/cron/notifications/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
 export async function GET(req: Request) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const resendApiKey = process.env.RESEND_API_KEY;
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
 
-    // ตรวจสอบว่ามี Environment Variables ก่อนเริ่มทำงาน
-    if (!supabaseUrl || !supabaseServiceKey) {
+    // 1. ตรวจสอบ Environment Variables
+    if (!supabaseUrl || !supabaseServiceKey || !gmailUser || !gmailAppPassword) {
       return NextResponse.json(
-        { error: 'Missing Supabase environment variables' },
+        { error: 'Environment variables missing' },
         { status: 500 }
       );
     }
 
-    // สร้าง Client ไว้ภายใน Handler
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const resend = new Resend(resendApiKey);
 
-    // 1. ดึงข้อมูล Profile ที่เปิดใช้งานแจ้งเตือน (is_notification_enabled = true)
+    // 2. ดึงข้อมูล Profile ที่เปิดการแจ้งเตือน
     const { data: profiles, error } = await supabase
       .from('profiles')
       .select('id, name, is_notification_enabled')
@@ -29,22 +28,38 @@ export async function GET(req: Request) {
 
     if (error) throw error;
 
-    // 2. วนลูปตรวจสอบและส่งอีเมล (ตัวอย่างภาพรวม)
-    if (profiles) {
-      for (const profile of profiles) {
-        // ดึง email ผู้ใช้จาก auth.users หรือส่งผ่าน Resend
-        // และดึง unbuilt_count จาก figure_items มาประมวลผล
-        
-        /* ตัวอย่างส่งอีเมล:
-        await resend.emails.send({
-          from: 'Onboarding <onboarding@resend.dev>',
-          to: ['user@example.com'],
-          subject: 'แจ้งเตือนประจำวัน: รายการฟิกเกอร์ที่ยังไม่ได้ต่อ',
-          html: `<p>คุณมีฟิกเกอร์ยังไม่ได้ต่ออยู่ในคอลเลกชัน!</p>`
-        });
-        */
-      }
+    // 3. สร้าง Transporter สำหรับเชื่อมต่อ Gmail SMTP
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: gmailUser,
+        pass: gmailAppPassword,
+      },
+    });
+
+    // 4. วนลูปส่งอีเมล
+    if (profiles && profiles.length > 0) {
+  for (const profile of profiles) {
+    // ดึงข้อมูลผู้ใช้จาก auth.users ด้วย Service Role Key
+    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(profile.id);
+    
+    const userEmail = userData?.user?.email;
+
+    if (userEmail) {
+      await transporter.sendMail({
+        from: `"FigureCraft" <${gmailUser}>`,
+        to: userEmail, // 👈 ใช้อีเมลที่ดึงจาก auth.users
+        subject: '🔔 รายงานคอลเลกชันฟิกเกอร์ประจำวัน - FigureCraft',
+        html: `
+          <div style="font-family: sans-serif; padding: 20px;">
+            <h2>สวัสดีครับคุณ ${profile.name}</h2>
+            <p>อย่าลืมกลับมาอัปเดตสถานะคอลเลกชันฟิกเกอร์ของคุณในวันนี้!</p>
+          </div>
+        `,
+      });
     }
+  }
+}
 
     return NextResponse.json({ success: true, processed: profiles?.length || 0 });
   } catch (err: any) {
