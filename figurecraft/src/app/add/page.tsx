@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
 export default function AddFigurePage() {
@@ -18,11 +18,22 @@ export default function AddFigurePage() {
     manufacturer_name: '',
     price: '',
     status: 'Pre-ordered',
-    assembly_status: 'unbuilt', // 🟢 เพิ่มสถานะการต่อเริ่มต้น
-    cover_image: '',
+    assembly_status: 'unbuilt',
     purchase_date: '',
     merchant_name: '',
   });
+
+  // 🟢 1. State สำหรับเก็บไฟล์รูปภาพ และ URL สำหรับ Preview
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      setPreviewUrl(URL.createObjectURL(file)); // สร้าง temporary preview URL
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +47,30 @@ export default function AddFigurePage() {
         throw new Error('กรุณาเข้าสู่ระบบก่อนทำการเพิ่มข้อมูล');
       }
 
+      let uploadedImageUrl = null;
+
+      // 🟢 2. อัปโหลดไฟล์รูปภาพไปยัง Supabase Storage หากมีการเลือกไฟล์
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('figure-covers') // ชื่อ Bucket ที่สร้างไว้
+          .upload(fileName, imageFile, { upsert: true });
+
+        if (uploadError) {
+          throw new Error(`อัปโหลดรูปภาพล้มเหลว: ${uploadError.message}`);
+        }
+
+        // ดึง Public URL ของไฟล์ที่อัปโหลดสำเร็จ
+        const { data: publicUrlData } = supabase.storage
+          .from('figure-covers')
+          .getPublicUrl(fileName);
+
+        uploadedImageUrl = publicUrlData.publicUrl;
+      }
+
+      // 🟢 3. นำ Public URL ที่ได้บันทึกลงใน DB คอลัมน์ cover_image
       const { error } = await supabase.from('figure_items').insert([
         {
           user_id: user.id,
@@ -43,8 +78,8 @@ export default function AddFigurePage() {
           manufacturer_name: formData.manufacturer_name || null,
           price: formData.price ? parseFloat(formData.price) : null,
           status: formData.status,
-          assembly_status: formData.assembly_status, // 🟢 ส่งค่า assembly_status ไป Supabase
-          cover_image: formData.cover_image || null,
+          assembly_status: formData.assembly_status,
+          cover_image: uploadedImageUrl,
           purchase_date: formData.purchase_date || null,
           merchant_name: formData.merchant_name || null,
         },
@@ -76,7 +111,7 @@ export default function AddFigurePage() {
           <div className="bg-white rounded-lg border-t-8 border-blue-600 p-6 shadow-sm border-x border-b border-slate-200">
             <h1 className="text-2xl font-bold text-slate-900">เพิ่มข้อมูลฟิกเกอร์ใหม่</h1>
             <p className="text-sm text-slate-500 mt-2">
-              กรอกรายละเอียดฟิกเกอร์เพื่อบันทึกลงในระบบ Supabase
+              กรอกรายละเอียดและอัปโหลดรูปภาพฟิกเกอร์
             </p>
             {errorMsg && (
               <p className="mt-3 text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
@@ -153,7 +188,7 @@ export default function AddFigurePage() {
               </div>
             </div>
 
-            {/* 🟢 สถานะการครอบครอง & สถานะการต่อ */}
+            {/* สถานะการสะสม & สถานะการต่อ */}
             <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-blue-600">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
@@ -182,16 +217,25 @@ export default function AddFigurePage() {
               </div>
             </div>
 
-            {/* ลิงก์รูปภาพ */}
+            {/* 🟢 4. ปรับเปลี่ยนส่วน Upload รูปภาพไฟล์ */}
             <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 focus-within:border-l-4 focus-within:border-l-blue-600">
-              <label className="block font-medium text-slate-800 mb-2">ลิงก์รูปภาพ (Cover Image URL)</label>
+              <label className="block font-medium text-slate-800 mb-2">อัปโหลดรูปภาพปก (Cover Image)</label>
               <input
-                type="url"
-                placeholder="https://example.com/image.jpg"
-                value={formData.cover_image}
-                onChange={(e) => setFormData({ ...formData, cover_image: e.target.value })}
-                className="w-full border-b border-slate-300 focus:border-blue-600 focus:outline-none py-2 text-slate-800 bg-transparent placeholder:text-slate-400"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="w-full text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
               />
+              {previewUrl && (
+                <div className="mt-4">
+                  <p className="text-xs text-slate-500 mb-2">ตัวอย่างรูปภาพ:</p>
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="w-32 h-32 object-cover rounded-lg border border-slate-200 shadow-sm"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -209,7 +253,7 @@ export default function AddFigurePage() {
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium px-6 py-2.5 rounded-md shadow transition-all active:scale-95 cursor-pointer"
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {loading ? 'กำลังบันทึก...' : 'ส่งข้อมูล (Submit)'}
+                {loading ? 'กำลังอัปโหลดและบันทึก...' : 'ส่งข้อมูล (Submit)'}
               </button>
             </div>
           </form>
