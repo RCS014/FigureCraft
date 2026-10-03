@@ -100,7 +100,7 @@ export default function SettingsPage() {
               className="w-4 h-4 mr-2 text-blue-600 rounded"
             />
             <label htmlFor="enable-notify" className="font-medium cursor-pointer">
-              เปิดการแจ้งเตือนทาง Email
+              เปิดการแจ้งเตือนแบบ Pop-up สำหรับฟิกเกอร์ที่ยังไม่ได้ต่อ
             </label>
           </div>
 
