@@ -1,9 +1,9 @@
 // src/app/add/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react'; // 🟢 1. Import useEffect เพิ่มเติม
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Upload } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
 export default function AddFigurePage() {
@@ -13,13 +13,13 @@ export default function AddFigurePage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // 🟢 2. เพิ่ม State สำหรับเก็บหมวดหมู่ที่ดึงมาจากฐานข้อมูล
+  // Dynamic Categories State
   const [categories, setCategories] = useState<{ id: number; code: string; name: string }[]>([]);
 
   const [formData, setFormData] = useState({
     figure_name: '',
     manufacturer_name: '',
-    category_id: '', // 🟢 เปลี่ยนมาเก็บเป็น category_id (BIGINT)
+    category_id: '',
     price: '',
     status: 'Pre-ordered',
     assembly_status: 'unbuilt',
@@ -30,7 +30,7 @@ export default function AddFigurePage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
 
-  // 🟢 3. เพิ่ม useEffect ดึงหมวดหมู่ Dynamic จาก Supabase ตาราง categories
+  // ดึงหมวดหมู่จาก Supabase
   useEffect(() => {
     async function fetchCategories() {
       const { data, error } = await supabase
@@ -41,13 +41,12 @@ export default function AddFigurePage() {
       if (!error && data) {
         setCategories(data);
         if (data.length > 0) {
-          // ตั้งค่า default เป็นหมวดหมู่แรกที่ดึงมาได้
-          setFormData((prev) => ({ ...prev, category_id: data[0].id.toString() }));
+          setFormData((prev) => ({ ...prev, category_id: String(data[0].id) }));
         }
       }
     }
     fetchCategories();
-  }, []);
+  }, [supabase]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -65,184 +64,199 @@ export default function AddFigurePage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setErrorMsg('กรุณาเข้าสู่ระบบก่อนทำการเพิ่มข้อมูล');
-        setLoading(false);
-        return;
+        throw new Error('กรุณาเข้าสู่ระบบก่อนทำการเพิ่มข้อมูล');
       }
 
-      let publicUrl = '';
+      let imageUrl = '';
 
+      // 🟢 1. อัปโหลดรูปภาพไปยัง Bucket 'figure-covers'
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `${user.id}/${fileName}`;
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
-          .from('figures')
-          .upload(filePath, imageFile);
+          .from('figure-covers') // 👈 ใช้ Bucket 'figure-covers'
+          .upload(fileName, imageFile);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          throw new Error(`อัปโหลดรูปภาพไม่สำเร็จ: ${uploadError.message}`);
+        }
 
-        const { data: publicUrlData } = supabase.storage
-          .from('figures')
-          .getPublicUrl(filePath);
+        // ดึง Public URL จาก Bucket 'figure-covers'
+        const { data: urlData } = supabase.storage
+          .from('figure-covers') // 👈 ใช้ Bucket 'figure-covers'
+          .getPublicUrl(fileName);
 
-        publicUrl = publicUrlData.publicUrl;
+        imageUrl = urlData.publicUrl;
       }
 
-      const { error: insertError } = await supabase
-        .from('figure_items')
-        .insert([
-          {
-            user_id: user.id,
-            figure_name: formData.figure_name,
-            manufacturer_name: formData.manufacturer_name,
-            category_id: formData.category_id ? parseInt(formData.category_id) : null, // 🟢 บันทึก category_id
-            price: formData.price ? parseFloat(formData.price) : 0,
-            status: formData.status,
-            assembly_status: formData.assembly_status,
-            purchase_date: formData.purchase_date || null,
-            merchant_name: formData.merchant_name || null,
-            image_url: publicUrl,
-          },
-        ]);
+      // 🟢 2. บันทึกข้อมูลเข้า Database
+      const { error: insertError } = await supabase.from('figure_items').insert({
+        user_id: user.id,
+        figure_name: formData.figure_name,
+        manufacturer_name: formData.manufacturer_name || null,
+        merchant_name: formData.merchant_name || null,
+        category_id: formData.category_id ? Number(formData.category_id) : null,
+        price: formData.price ? Number(formData.price) : 0,
+        status: formData.status,
+        assembly_status: formData.assembly_status,
+        purchase_date: formData.purchase_date || null,
+        image_url: imageUrl || null,
+      });
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        throw new Error(`บันทึกข้อมูลไม่สำเร็จ: ${insertError.message}`);
+      }
 
       router.push('/');
       router.refresh();
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
+      setErrorMsg(err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-slate-50 min-h-screen">
+    <div className="max-w-2xl mx-auto p-4 sm:p-6">
       <button
+        type="button"
         onClick={() => router.back()}
-        className="flex items-center text-slate-600 hover:text-slate-900 mb-6 font-medium cursor-pointer"
+        className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-6 font-medium cursor-pointer"
       >
-        <ArrowLeft className="w-5 h-5 mr-1" /> ย้อนกลับ
+        <ArrowLeft className="w-4 h-4" /> ย้อนกลับ
       </button>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-        <h1 className="text-2xl font-bold text-slate-900 mb-6">เพิ่มฟิกเกอร์ / กันพลาใหม่</h1>
+      <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900 mb-6">เพิ่มข้อมูลฟิกเกอร์ใหม่</h1>
 
         {errorMsg && (
-          <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-lg text-sm">
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 font-medium">
             {errorMsg}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* ชื่อฟิกเกอร์ */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              ชื่อฟิกเกอร์ / โมเดล <span className="text-red-500">*</span>
+            <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+              ชื่อฟิกเกอร์ <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               required
+              placeholder="เช่น RG 1/144 RX-78-2 Gundam Ver.2.0"
               value={formData.figure_name}
               onChange={(e) => setFormData({ ...formData, figure_name: e.target.value })}
-              placeholder="เช่น RX-78-2 Gundam"
-              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* ค่าย / ผู้ผลิต */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ค่าย / ผู้ผลิต</label>
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">ค่าย / ผู้ผลิต</label>
               <input
                 type="text"
+                placeholder="เช่น Bandai, Good Smile"
                 value={formData.manufacturer_name}
                 onChange={(e) => setFormData({ ...formData, manufacturer_name: e.target.value })}
-                placeholder="เช่น Bandai, Kotobukiya"
-                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
-            {/* 🟢 4. จุดวาง Dropdown Dynamic */}
+            {/* หมวดหมู่ */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">หมวดหมู่ / เกรด</label>
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">หมวดหมู่</label>
               <select
                 value={formData.category_id}
                 onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white cursor-pointer"
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
               >
-                {categories.length === 0 ? (
-                  <option value="">กำลังโหลดหมวดหมู่...</option>
-                ) : (
-                  categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))
-                )}
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id} className="text-slate-900 bg-white">
+                    {cat.code} - {cat.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* ร้านค้า */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ราคา (บาท)</label>
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">ร้านค้าที่ซื้อ</label>
               <input
-                type="number"
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                placeholder="0.00"
-                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                type="text"
+                placeholder="เช่น Shopee, Yumeya"
+                value={formData.merchant_name}
+                onChange={(e) => setFormData({ ...formData, merchant_name: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
+            {/* ราคา */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">สถานะสินค้า</label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white cursor-pointer"
-              >
-                <option value="Pre-ordered">Pre-ordered</option>
-                <option value="In Stock">In Stock (มีของพร้อมต่อ)</option>
-                <option value="Wishlist">Wishlist (อยากได้)</option>
-              </select>
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">ราคา (บาท)</label>
+              <input
+                type="number"
+                min="0"
+                placeholder="0.00"
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* วันที่ซื้อ */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">สถานะการประกอบ</label>
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">วันที่สั่งซื้อ / ได้รับ</label>
+              <input
+                type="date"
+                value={formData.purchase_date}
+                onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+              />
+            </div>
+
+            {/* สถานะสินค้า */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">สถานะสินค้า</label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+              >
+                <option value="Pre-ordered">Pre-ordered</option>
+                <option value="In Stock">In Stock</option>
+                <option value="Wishlist">Wishlist</option>
+              </select>
+            </div>
+
+            {/* สถานะการต่อ */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">สถานะการต่อ</label>
               <select
                 value={formData.assembly_status}
                 onChange={(e) => setFormData({ ...formData, assembly_status: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white cursor-pointer"
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
               >
                 <option value="unbuilt">ยังไม่ได้ต่อ</option>
                 <option value="built">ต่อเสร็จแล้ว</option>
               </select>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ร้านค้าที่ซื้อ</label>
-              <input
-                type="text"
-                value={formData.merchant_name}
-                onChange={(e) => setFormData({ ...formData, merchant_name: e.target.value })}
-                placeholder="เช่น Shopee, ร้าน Gunpla Shop"
-                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
           </div>
 
-          <div className="border-t pt-4">
-            <label className="block text-sm font-medium text-slate-700 mb-2">รูปภาพปก</label>
+          {/* อัปโหลดรูปภาพ */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <label className="block text-sm font-semibold text-slate-800 mb-2">รูปภาพปก (Cover Image)</label>
             <input
               type="file"
               accept="image/*"
               onChange={handleFileChange}
-              className="w-full text-slate-600 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+              className="w-full text-slate-700 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
             />
             {previewUrl && (
               <div className="mt-4">
@@ -250,7 +264,7 @@ export default function AddFigurePage() {
                 <img
                   src={previewUrl}
                   alt="Preview"
-                  className="w-32 h-32 object-cover rounded-lg border border-slate-200 shadow-sm"
+                  className="w-32 h-32 object-cover rounded-lg border border-slate-300 shadow-sm"
                 />
               </div>
             )}
@@ -260,7 +274,7 @@ export default function AddFigurePage() {
             <button
               type="button"
               onClick={() => router.back()}
-              className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
+              className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
             >
               ยกเลิก
             </button>
@@ -270,7 +284,7 @@ export default function AddFigurePage() {
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium px-6 py-2.5 rounded-lg shadow transition-all cursor-pointer"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? 'กำลังบันทึก...' : 'บันทึกฟิกเกอร์'}
+              {loading ? 'กำลังอัปโหลดและบันทึก...' : 'บันทึกข้อมูล'}
             </button>
           </div>
         </form>
