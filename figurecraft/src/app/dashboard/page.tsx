@@ -3,10 +3,19 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 
+// 🟢 โครงสร้างข้อมูลหมวดหมู่ (จากตาราง categories)
+interface Category {
+  id: number
+  code: string
+  name: string
+}
+
+// 🟢 โครงสร้างข้อมูลรายการฟิกเกอร์
 interface FigureItem {
   item_id: string
-  name: string
-  category?: string
+  figure_name?: string
+  name?: string
+  categories?: Category | null
   assembly_status: string
   price?: number
   image_url?: string
@@ -40,78 +49,84 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // 1. ดึงโปรไฟล์เพื่อเช็คการตั้งค่าการแจ้งเตือน
+      // 1. ดึงข้อมูลโปรไฟล์เพื่อเช็คการเปิดแจ้งเตือน
       const { data: profile } = await supabase
         .from('profiles')
         .select('is_notification_enabled')
         .eq('id', user.id)
         .single()
 
-      // 2. ดึงรายการฟิกเกอร์ทั้งหมดของผู้ใช้
+      // 2. ดึงรายการฟิกเกอร์ของผู้ใช้ พร้อม Join ข้อมูลจากตาราง categories
       const { data: items, error } = await supabase
         .from('figure_items')
-        .select('*')
+        .select(`
+          *,
+          categories (
+            id,
+            code,
+            name
+          )
+        `)
         .eq('user_id', user.id)
 
       if (error) {
-        console.error('Error fetching figure stats:', error)
+        console.error('Error fetching dashboard data:', error)
         return
       }
 
       if (items) {
         const total = items.length
-        
-        // กรองรายการที่ต่อเสร็จแล้ว
-        const assembledList = items.filter(
-          (item) => 
-            item.assembly_status === 'built' || 
-            item.assembly_status === 'assembled' || 
+
+        // นับจำนวนที่ต่อเสร็จแล้ว
+        const assembled = items.filter(
+          (item) =>
+            item.assembly_status === 'built' ||
+            item.assembly_status === 'assembled' ||
             item.assembly_status === 'completed'
-        )
+        ).length
 
-        // กรองรายการที่ยังไม่ได้ต่อ
-        const unbuiltList = items.filter(
-          (item) => 
-            item.assembly_status !== 'built' && 
-            item.assembly_status !== 'assembled' && 
-            item.assembly_status !== 'completed'
-        )
+        // นับจำนวนที่ยังไม่ได้ต่อ
+        const unassembled = items.filter(
+          (item) => item.assembly_status === 'unbuilt'
+        ).length
 
-        const assembled = assembledList.length
-        const unassembled = unbuiltList.length
-        const progress = total > 0 ? Math.round((assembled / total) * 100) : 0
+        // คำนวณราคารวม และ % ความคืบหน้า
         const totalPrice = items.reduce((sum, item) => sum + (Number(item.price) || 0), 0)
+        const progress = total > 0 ? Math.round((assembled / total) * 100) : 0
 
-        setStats({ total, assembled, unassembled, totalPrice, progress })
+        setStats({
+          total,
+          assembled,
+          unassembled,
+          totalPrice,
+          progress,
+        })
+
+        // 🟢 สรุปจำนวนแยกตามหมวดหมู่ Dynamic (อ่านจากตาราง categories)
+        const catCounts: { [key: string]: number } = {}
+        items.forEach((item) => {
+          const catName = item.categories?.name || 'ไม่ระบุหมวดหมู่'
+          catCounts[catName] = (catCounts[catName] || 0) + 1
+        })
+        setCategoryStats(catCounts)
+
+        // กรองเฉพาะรายการที่ยังไม่ได้ต่อ
+        const unbuiltList = items.filter((item) => item.assembly_status === 'unbuilt')
         setUnassembledItems(unbuiltList)
 
-        // สรุปสถิติแยกตามหมวดหมู่ (US-3.2)
-        const catMap: { [key: string]: number } = {}
-        items.forEach((item) => {
-          const cat = item.category || 'ทั่วไป'
-          catMap[cat] = (catMap[cat] || 0) + 1
-        })
-        setCategoryStats(catMap)
-
-        // 3. ตรวจสอบการแสดง Pop-up แจ้งเตือนวันละ 1 ครั้ง
+        // แสดง Pop-up แจ้งเตือน ถ้าผู้ใช้เปิดรับแจ้งเตือนและมีฟิกเกอร์ดอง
         if (profile?.is_notification_enabled && unbuiltList.length > 0) {
-          const today = new Date().toISOString().split('T')[0] // ได้วันที่ YYYY-MM-DD
-          const lastShownDate = localStorage.getItem('figurecraft_last_popup_date')
-
-          if (lastShownDate !== today) {
-            setShowPopup(true)
-            localStorage.setItem('figurecraft_last_popup_date', today)
-          }
+          setShowPopup(true)
         }
       }
     } catch (err) {
-      console.error(err)
+      console.error('Unexpected error:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  // ทางลัดเปลี่ยนสถานะเป็น "ต่อแล้ว" (US-3.3)
+  // ฟังก์ชันเปลี่ยนสถานะเป็นต่อเสร็จแล้ว (Mark as Built)
   const handleMarkAsBuilt = async (itemId: string) => {
     try {
       setUpdatingId(itemId)
@@ -120,136 +135,145 @@ export default function DashboardPage() {
         .update({ assembly_status: 'built' })
         .eq('item_id', itemId)
 
-      if (error) {
-        alert('อัปเดตสถานะไม่สำเร็จ: ' + error.message)
-      } else {
-        // รีโหลดข้อมูลสถิติใหม่
-        await fetchDashboardData()
-      }
+      if (error) throw error
+
+      // ดึงข้อมูลใหม่เพื่ออัปเดตหน้า Dashboard ทันที
+      await fetchDashboardData()
+    } catch (err) {
+      console.error('Error updating status:', err)
     } finally {
       setUpdatingId(null)
     }
   }
 
-  if (loading) return <div className="p-6 text-gray-600">กำลังโหลดข้อมูล Dashboard...</div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] text-slate-600">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+        กำลังโหลดข้อมูล...
+      </div>
+    )
+  }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-800">Dashboard ภาพรวมคลังฟิกเกอร์</h1>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
 
-      {/* US-3.1: การ์ดสรุปสถิติจำนวนและมูลค่า */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="p-4 bg-white rounded-xl shadow border border-gray-100">
-          <p className="text-sm text-gray-500">โมเดลทั้งหมด</p>
-          <p className="text-3xl font-bold text-gray-800">{stats.total} ตัว</p>
+      {/* การ์ดสรุปสถิติหลัก */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* โมเดลทั้งหมด */}
+        <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">โมเดลทั้งหมด</p>
+          <p className="text-3xl font-bold text-slate-800">{stats.total} <span className="text-sm font-normal text-slate-500">ตัว</span></p>
         </div>
 
-        <div className="p-4 bg-green-50 rounded-xl shadow border border-green-200">
-          <p className="text-sm text-green-600 font-medium">ต่อเสร็จแล้ว</p>
-          <p className="text-3xl font-bold text-green-700">{stats.assembled} ตัว</p>
+        {/* ต่อแล้ว */}
+        <div className="p-5 bg-emerald-50 rounded-2xl shadow-sm border border-emerald-100">
+          <p className="text-xs font-medium text-emerald-600 uppercase tracking-wider mb-1">ต่อเสร็จแล้ว</p>
+          <p className="text-3xl font-bold text-emerald-700">{stats.assembled} <span className="text-sm font-normal text-emerald-600">ตัว</span></p>
         </div>
 
-        <div className="p-4 bg-amber-50 rounded-xl shadow border border-amber-200">
-          <p className="text-sm text-amber-600 font-medium">ยังไม่ได้ต่อ</p>
-          <p className="text-3xl font-bold text-amber-700">{stats.unassembled} ตัว</p>
+        {/* ยังไม่ได้ต่อ */}
+        <div className="p-5 bg-amber-50 rounded-2xl shadow-sm border border-amber-100">
+          <p className="text-xs font-medium text-amber-600 uppercase tracking-wider mb-1">ยังไม่ได้ต่อ (งานดอง)</p>
+          <p className="text-3xl font-bold text-amber-700">{stats.unassembled} <span className="text-sm font-normal text-amber-600">ตัว</span></p>
         </div>
 
-        <div className="p-4 bg-blue-50 rounded-xl shadow border border-blue-200">
-          <p className="text-sm text-blue-600 font-medium">ความคืบหน้า</p>
-          <p className="text-3xl font-bold text-blue-700">{stats.progress}%</p>
-        </div>
-
-        <div className="p-4 bg-purple-50 rounded-xl shadow border border-purple-200">
-          <p className="text-sm text-purple-600 font-medium">มูลค่ารวมในคลัง</p>
-          <p className="text-2xl font-bold text-purple-700">
-            ฿{stats.totalPrice.toLocaleString()}
-          </p>
+        {/* มูลค่ารวม */}
+        <div className="p-5 bg-blue-50 rounded-2xl shadow-sm border border-blue-100">
+          <p className="text-xs font-medium text-blue-600 uppercase tracking-wider mb-1">มูลค่าคลังรวม</p>
+          <p className="text-3xl font-bold text-blue-700">฿{stats.totalPrice.toLocaleString()}</p>
         </div>
       </div>
 
-      {/* US-3.2: หลอดแสดงความคืบหน้าการต่อ & สัดส่วนหมวดหมู่ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-5 rounded-xl shadow border border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-800 mb-2">ความคืบหน้าการประกอบฟิกเกอร์</h2>
-          <div className="w-full bg-gray-200 rounded-full h-4 mb-3 overflow-hidden">
-            <div 
-              className="bg-green-500 h-4 rounded-full transition-all duration-500" 
-              style={{ width: `${stats.progress}%` }}
-            ></div>
-          </div>
-          <p className="text-sm text-gray-600">
-            ต่อเสร็จไปแล้ว {stats.assembled} จากทั้งหมด {stats.total} รายการ ({stats.progress}%)
-          </p>
+      {/* Progress Bar ความคืบหน้าการต่อ */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-2">
+        <div className="flex justify-between items-center text-sm">
+          <span className="font-semibold text-slate-700">ความคืบหน้าการประกอบ</span>
+          <span className="font-bold text-blue-600">{stats.progress}%</span>
         </div>
+        <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+          <div
+            className="bg-blue-600 h-full rounded-full transition-all duration-500"
+            style={{ width: `${stats.progress}%` }}
+          ></div>
+        </div>
+      </div>
 
-        <div className="bg-white p-5 rounded-xl shadow border border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">จำแนกตามหมวดหมู่</h2>
-          <div className="space-y-2">
-            {Object.keys(categoryStats).length > 0 ? (
-              Object.entries(categoryStats).map(([cat, count]) => (
-                <div key={cat} className="flex justify-between items-center text-sm border-b pb-1">
-                  <span className="text-gray-600">{cat}</span>
-                  <span className="font-semibold text-gray-800">{count} รายการ</span>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* สรุปจำนวนแยกตามหมวดหมู่ */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h2 className="text-lg font-bold text-slate-800 mb-4">จำนวนแบ่งตามหมวดหมู่</h2>
+          {Object.keys(categoryStats).length === 0 ? (
+            <p className="text-slate-400 text-sm">ยังไม่มีข้อมูลหมวดหมู่</p>
+          ) : (
+            <div className="space-y-3">
+              {Object.entries(categoryStats).map(([catName, count]) => (
+                <div key={catName} className="flex justify-between items-center text-sm border-b pb-2 border-slate-50">
+                  <span className="text-slate-700 font-medium">{catName}</span>
+                  <span className="bg-slate-100 text-slate-700 font-semibold px-2.5 py-0.5 rounded-full text-xs">
+                    {count} ตัว
+                  </span>
                 </div>
-              ))
-            ) : (
-              <p className="text-sm text-gray-400">ยังไม่มีข้อมูลหมวดหมู่</p>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* US-3.3: รายการฟิกเกอร์ที่ยังไม่ได้ต่อล่าสุด พร้อมปุ่มทางลัด Mark as Built */}
-      <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">
-          รายการที่ยังไม่ได้ต่อล่าสุด (Quick Actions)
-        </h2>
+        {/* รายการค้างต่อล่าสุด พร้อมปุ่มทางลัด */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h2 className="text-lg font-bold text-slate-800 mb-4">รายการค้างต่อล่าสุด</h2>
+          {unassembledItems.length === 0 ? (
+            <div className="text-center py-6 text-slate-400 text-sm">
+              🎉 ยินดีด้วย! คุณไม่มีงานดองค้างอยู่เลย
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {unassembledItems.slice(0, 5).map((item) => (
+                <div
+                  key={item.item_id}
+                  className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100"
+                >
+                  <div className="min-w-0 pr-2">
+                    <p className="font-semibold text-slate-800 text-sm truncate">
+                      {item.figure_name || item.name || 'ไม่มีชื่อโมเดล'}
+                    </p>
+                    {item.categories && (
+                      <span className="inline-block mt-1 text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md font-medium">
+                        {item.categories.name}
+                      </span>
+                    )}
+                  </div>
 
-        {unassembledItems.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 bg-green-50 rounded-lg">
-            🎉 ยินดีด้วย! คุณต่อฟิกเกอร์ในคลังครบทุกชิ้นแล้ว
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {unassembledItems.slice(0, 6).map((item) => (
-              <div 
-                key={item.item_id} 
-                className="flex items-center space-x-4 p-3 border rounded-lg hover:shadow-md transition"
-              >
-                <img 
-                  src={item.image_url || 'https://via.placeholder.com/80?text=No+Image'} 
-                  alt={item.name}
-                  className="w-16 h-16 object-cover rounded bg-gray-100"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/80?text=No+Image'
-                  }}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-800 truncate">{item.name}</p>
-                  <p className="text-xs text-amber-600 font-medium">ยังไม่ได้ต่อ</p>
                   <button
                     onClick={() => handleMarkAsBuilt(item.item_id)}
                     disabled={updatingId === item.item_id}
-                    className="mt-2 text-xs bg-green-600 hover:bg-green-700 text-white font-medium px-2.5 py-1 rounded transition disabled:bg-gray-300"
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg shadow-sm transition-colors shrink-0 disabled:bg-emerald-300 cursor-pointer"
                   >
-                    {updatingId === item.item_id ? 'กำลังบันทึก...' : '✓ ทำ Mark as Built'}
+                    {updatingId === item.item_id ? 'กำลังบันทึก...' : 'ต่อเสร็จแล้ว'}
                   </button>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+
+              {unassembledItems.length > 5 && (
+                <p className="text-xs text-center text-slate-400 pt-1">
+                  + อีก {unassembledItems.length - 5} รายการในคลังของคุณ
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Pop-up แจ้งเตือนประจำวัน (Daily Pop-up Modal) */}
+      {/* Pop-up แจ้งเตือนประจำวัน */}
       {showPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-center space-y-4 animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center space-y-4 shadow-xl border border-slate-100">
             <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto text-2xl font-bold">
               🔔
             </div>
-            <h3 className="text-xl font-bold text-gray-800">แจ้งเตือนประจำวัน!</h3>
-            <p className="text-sm text-gray-600">
+            <h3 className="text-xl font-bold text-slate-800">แจ้งเตือนประจำวัน!</h3>
+            <p className="text-sm text-slate-600">
               คุณยังมีฟิกเกอร์ที่ยังไม่ได้ต่อค้างอยู่ในคลังจำนวน{' '}
               <span className="font-bold text-amber-600">{stats.unassembled} รายการ</span>
             </p>
@@ -257,12 +281,19 @@ export default function DashboardPage() {
             <div className="max-h-40 overflow-y-auto space-y-2 border-y py-2 text-left">
               {unassembledItems.slice(0, 3).map((item) => (
                 <div key={item.item_id} className="flex items-center space-x-2 text-sm">
-                  <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
-                  <span className="truncate text-gray-700 font-medium">{item.name}</span>
+                  <span className="w-2 h-2 bg-amber-500 rounded-full shrink-0"></span>
+                  <span className="truncate text-slate-700 font-medium">
+                    {item.figure_name || item.name || 'ไม่มีชื่อโมเดล'}
+                  </span>
+                  {item.categories && (
+                    <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded shrink-0">
+                      {item.categories.code || item.categories.name}
+                    </span>
+                  )}
                 </div>
               ))}
               {unassembledItems.length > 3 && (
-                <p className="text-xs text-gray-400 text-center">
+                <p className="text-xs text-slate-400 text-center">
                   + อีก {unassembledItems.length - 3} รายการในคลังของคุณ
                 </p>
               )}
@@ -270,9 +301,9 @@ export default function DashboardPage() {
 
             <button
               onClick={() => setShowPopup(false)}
-              className="w-full bg-blue-600 text-white font-medium py-2 rounded-xl hover:bg-blue-700 transition"
+              className="w-full bg-blue-600 text-white font-medium py-2 rounded-xl hover:bg-blue-700 transition-colors shadow cursor-pointer"
             >
-              รับทราบ / เข้าสู่คลังของฉัน
+              รับทราบ
             </button>
           </div>
         </div>
