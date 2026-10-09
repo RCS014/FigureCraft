@@ -101,7 +101,7 @@ export default function AddFigurePage() {
         status: formData.status,
         assembly_status: formData.assembly_status,
         purchase_date: formData.purchase_date || null,
-        image_url: imageUrl || null,
+        cover_image: imageUrl || null,
       });
 
       if (insertError) {
