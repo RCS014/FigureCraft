@@ -1,2 +1,3 @@
 # FigureCraft
-Figure management website.  Passion/Uni solo project
+วิธีใช้งานเว็บไซด์ฟิกเกอร์คราฟ
+
