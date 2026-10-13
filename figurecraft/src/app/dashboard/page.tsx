@@ -3,14 +3,14 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 
-// 🟢 โครงสร้างข้อมูลหมวดหมู่ (จากตาราง categories)
+// โครงสร้างข้อมูลหมวดหมู่ (จากตาราง categories)
 interface Category {
   id: number
   code: string
   name: string
 }
 
-// 🟢 โครงสร้างข้อมูลรายการฟิกเกอร์
+// โครงสร้างข้อมูลรายการฟิกเกอร์
 interface FigureItem {
   item_id: string
   figure_name?: string
@@ -102,7 +102,7 @@ export default function DashboardPage() {
           progress,
         })
 
-        // 🟢 สรุปจำนวนแยกตามหมวดหมู่ Dynamic (อ่านจากตาราง categories)
+        // สรุปจำนวนแยกตามหมวดหมู่ Dynamic (อ่านจากตาราง categories)
         const catCounts: { [key: string]: number } = {}
         items.forEach((item) => {
           const catName = item.categories?.name || 'ไม่ระบุหมวดหมู่'
@@ -114,9 +114,16 @@ export default function DashboardPage() {
         const unbuiltList = items.filter((item) => item.assembly_status === 'unbuilt')
         setUnassembledItems(unbuiltList)
 
-        // แสดง Pop-up แจ้งเตือน ถ้าผู้ใช้เปิดรับแจ้งเตือนและมีฟิกเกอร์ดอง
+        // 🟢 3. ตรวจสอบการแสดง Pop-up แจ้งเตือนวันละ 1 ครั้ง
         if (profile?.is_notification_enabled && unbuiltList.length > 0) {
-          setShowPopup(true)
+          const today = new Date().toISOString().split('T')[0] // ดึงวันที่ YYYY-MM-DD
+          const lastShownDate = localStorage.getItem('figurecraft_last_popup_date')
+
+          // เงื่อนไขกระตุ้น Trigger: ถ้ายังไม่ได้แสดงในวันนี้ ให้เปิด Pop-up
+          if (lastShownDate !== today) {
+            setShowPopup(true)
+            localStorage.setItem('figurecraft_last_popup_date', today)
+          }
         }
       }
     } catch (err) {
