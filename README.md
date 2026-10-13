@@ -8,8 +8,8 @@
 - 68023278 นัธทวัฒน์ เศวตวงศ์
 
 ## การเข้าถึงหน้าต่างๆ
-- หน้าแรก : `https://figure-craft-figurecraft-d4xbgeuli-rcss-projects-34161b72.vercel.app/`
-- เพิ่มฟิกเกอร์ใหม่: `https://figure-craft-figurecraft-d4xbgeuli-rcss-projects-34161b72.vercel.app/add`
+- หน้าแรก : `https://figure-craft-figurecraft.vercel.app`
+- เพิ่มฟิกเกอร์ใหม่: `https://figure-craft-figurecraft.vercel.app/add`
 - ตั้งค่าการแจ้งเตือน: เข้าผ่านเมนูตั้งค่าโปรไฟล์หลังเข้าสู่ระบบ
 
 ---
@@ -28,7 +28,7 @@
 4. อัปโหลดรูปภาพปก → ระบบบันทึกไฟล์ลง Supabase Storage Bucket (`figure-covers`) และดึง Public URL มาบันทึกเข้าตาราง `figure_items`
 
 ## ฟีเจอร์ 03 — Dashboard สรุปภาพรวมสถิติคลัง (Dashboard & Analytics)
-1. เข้าสู่หน้าหลัก (`/`) ระบบประมวลผลคำนวณสถิติต่างๆ จากคลังฟิกเกอร์ของผู้ใช้งาน
+1. เข้าสู่ Dashboard (`/dashboard`) ระบบประมวลผลคำนวณสถิติต่างๆ จากคลังฟิกเกอร์ของผู้ใช้งาน
 2. แสดงการ์ดสถิติ 4 ด้าน: โมเดลทั้งหมด (ตัว), ต่อเสร็จแล้ว (ตัว), ยังไม่ได้ต่อ/งานดอง (ตัว), และมูลค่าคลังรวม (บาท)
 3. แสดง Progress Bar คำนวณ % ความคืบหน้าการต่อโมเดลทั้งหมดในคลัง
 4. แสดงตารางสรุปจำนวนโมเดลแยกตามหมวดหมู่แบบ Dynamic
